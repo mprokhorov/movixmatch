@@ -25,7 +25,21 @@
    **`public/firebase-config.js`** (или просто пришли их мне — я вставлю и запушу).
    Эти ключи не секретные, данные защищают правила `firestore.rules`.
 
-## 4. Залей (на компьютере)
+## 4а. Автодеплой через GitHub (рекомендуется, всё в браузере)
+
+После настройки каждый пуш в `main` сам выкатывает сайт (`.github/workflows/deploy.yml`).
+
+1. Открой https://console.cloud.google.com/iam-admin/serviceaccounts/create?project=movixmatch
+2. Имя: `github-deploy` → **Create and continue**.
+3. Роли: **Firebase Admin**, затем **Add another role** → **Service Usage Consumer** → **Continue** → **Done**.
+4. Кликни по созданному аккаунту → вкладка **Keys** → **Add key** → **Create new key** → **JSON** → **Create**. Скачается файл.
+5. Открой файл Блокнотом, скопируй всё содержимое.
+6. https://github.com/mprokhorov/movixmatch/settings/secrets/actions → **New repository secret**:
+   имя `FIREBASE_SERVICE_ACCOUNT`, значение — скопированный JSON → **Add secret**.
+7. Удали скачанный файл — ключ даёт полный доступ к проекту.
+8. Вкладка **Actions** → **Deploy to Firebase** → **Run workflow**. Через пару минут сайт на https://movixmatch.web.app.
+
+## 4б. Или залей вручную (на компьютере)
 
 Нужен Node.js — скачай LTS с https://nodejs.org, если ещё нет.
 
