@@ -1,11 +1,10 @@
-// Вставь сюда конфиг из Firebase Console:
-// Project settings → General → Your apps → Web app → SDK setup and configuration → Config.
+// Конфиг веб-приложения из Firebase Console (Project settings → Your apps).
 // Эти значения не секретные — доступ к данным защищают правила firestore.rules.
 export const firebaseConfig = {
-  apiKey: 'PASTE_API_KEY',
+  apiKey: 'AIzaSyDRG3WI9l7q49XdsqiLn3HUexnskGCQCdI',
   authDomain: 'movixmatch.firebaseapp.com',
   projectId: 'movixmatch',
   storageBucket: 'movixmatch.firebasestorage.app',
-  messagingSenderId: 'PASTE_SENDER_ID',
-  appId: 'PASTE_APP_ID',
+  messagingSenderId: '530792976233',
+  appId: '1:530792976233:web:0063e4a33efba42a8c77f8',
 };
