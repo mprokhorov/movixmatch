@@ -1,12 +1,10 @@
 {
   "name": "movixmatch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tinder для пар: свайпайте фильмы вдвоём и находите то, что понравится обоим",
-  "type": "module",
   "private": true,
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
-  },
-  "engines": { "node": ">=20" }
+    "dev": "firebase emulators:start --project demo-movixmatch",
+    "deploy": "firebase deploy"
+  }
 }

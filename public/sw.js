@@ -1,8 +1,8 @@
 // MovixMatch service worker: app shell offline, posters cache-first, API always network.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `shell-${VERSION}`;
 const POSTERS = 'posters-v1';
-const SHELL_FILES = ['/', '/index.html', '/styles.css', '/app.js', '/movies.json', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
+const SHELL_FILES = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.js', '/movies.json', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
