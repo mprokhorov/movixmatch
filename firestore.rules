@@ -1,81 +1,73 @@
 rules_version = '2';
 
-// MovixMatch: each couple lives in rooms/{rid}. Only its two members can read or write it.
-// Seats are bound to anonymous-auth uids; a seat can be (re)claimed on a new device only with
-// a secret the URL carries: the invite code (partner) or the owner key (owner).
+// MovixMatch data model
+//   users/{uid}                         profile: name, genres, likes, presence
+//   invites/{code}                      one-time link to connect two existing profiles
+//   pairs/{uidA_uidB}                   a connection (uids sorted), read markers
+//     matches/{movieId}                 a film both liked
+//       messages/{id}                   chat about that film
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function roomData(rid) { return get(/databases/$(database)/documents/rooms/$(rid)).data; }
     function signedIn() { return request.auth != null; }
-    function isOwner(rid) { return signedIn() && roomData(rid).ownerUid == request.auth.uid; }
-    function isPartner(rid) { return signedIn() && roomData(rid).get('partnerUid', null) == request.auth.uid; }
-    function isMember(rid) { return isOwner(rid) || isPartner(rid); }
-    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function me() { return request.auth.uid; }
+    function pairIdOf(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function pairPath(id) { return /databases/$(database)/documents/pairs/$(id); }
+    function invitePath(code) { return /databases/$(database)/documents/invites/$(code); }
+    function connectedTo(uid) { return exists(pairPath(pairIdOf(uid, me()))); }
+    function memberOf(pairId) { return signedIn() && me() in get(pairPath(pairId)).data.members; }
 
-    match /rooms/{rid} {
-      allow get: if signedIn()
-        && (resource.data.ownerUid == request.auth.uid || resource.data.get('partnerUid', null) == request.auth.uid);
+    // a connection may only be created from a live invite of the *other* member,
+    // and the invite must be deleted in the same batch, so every link works exactly once
+    function inviteValid(code, members) {
+      return code is string
+        && exists(invitePath(code))
+        && !existsAfter(invitePath(code))
+        && get(invitePath(code)).data.fromUid in members
+        && get(invitePath(code)).data.fromUid != me()
+        && get(invitePath(code)).data.expiresAt > request.time.toMillis();
+    }
 
+    match /users/{uid} {
+      allow read: if signedIn() && (uid == me() || connectedTo(uid));
+      allow create, update: if signedIn() && uid == me()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30
+        && request.resource.data.genres is list && request.resource.data.genres.size() <= 30;
+      allow delete: if signedIn() && uid == me();
+    }
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.fromUid == me();
+      allow create: if signedIn() && code.size() >= 12
+        && request.resource.data.fromUid == me()
+        && request.resource.data.fromName is string && request.resource.data.fromName.size() <= 30
+        && request.resource.data.expiresAt is int;
+      allow delete: if signedIn() && (resource.data.fromUid == me()
+        || existsAfter(pairPath(pairIdOf(resource.data.fromUid, me()))));
+    }
+
+    match /pairs/{pairId} {
+      allow read: if signedIn() && me() in resource.data.members;
       allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.partnerUid == null
-        && request.resource.data.ownerName is string && request.resource.data.ownerName.size() <= 30;
-
-      allow update: if signedIn() && (
-        // a member renames themselves
-        ((resource.data.ownerUid == request.auth.uid || resource.data.get('partnerUid', null) == request.auth.uid)
-          && changed().hasOnly(['ownerName', 'partnerName']))
-        // partner joins (or re-joins on a new device): the same batch must write joins/{uid}
-        // with a code that matches a live invite
-        || (request.resource.data.partnerUid == request.auth.uid
-          && changed().hasOnly(['partnerUid', 'partnerName'])
-          && request.resource.data.partnerName is string && request.resource.data.partnerName.size() <= 30
-          && existsAfter(/databases/$(database)/documents/rooms/$(rid)/joins/$(request.auth.uid))
-          && exists(/databases/$(database)/documents/rooms/$(rid)/invites/$(getAfter(/databases/$(database)/documents/rooms/$(rid)/joins/$(request.auth.uid)).data.code)))
-        // owner signs in on a new device: the same batch must write ownerClaims/{uid} with a valid owner key
-        || (request.resource.data.ownerUid == request.auth.uid
-          && changed().hasOnly(['ownerUid'])
-          && existsAfter(/databases/$(database)/documents/rooms/$(rid)/ownerClaims/$(request.auth.uid))
-          && exists(/databases/$(database)/documents/rooms/$(rid)/keys/$(getAfter(/databases/$(database)/documents/rooms/$(rid)/ownerClaims/$(request.auth.uid)).data.key)))
-      );
-
-      // partner invite codes: knowing the code is the secret, so a direct get is allowed
-      match /invites/{code} {
-        allow get: if signedIn();
-        allow list: if isMember(rid);
-        allow create, delete: if isOwner(rid);
-      }
-
-      // proof-of-secret docs written together with a seat claim (see room update rule)
-      match /joins/{uid} {
-        allow create, update: if signedIn() && uid == request.auth.uid
-          && request.resource.data.code is string
-          && exists(/databases/$(database)/documents/rooms/$(rid)/invites/$(request.resource.data.code));
-      }
-      match /ownerClaims/{uid} {
-        allow create, update: if signedIn() && uid == request.auth.uid
-          && request.resource.data.key is string
-          && exists(/databases/$(database)/documents/rooms/$(rid)/keys/$(request.resource.data.key));
-      }
-
-      // owner recovery keys: never readable by id, only the owner can list them
-      match /keys/{key} {
-        allow list, create, delete: if isOwner(rid);
-      }
-
-      // per-seat state: name, likes, read markers, presence
-      match /members/{role} {
-        allow read: if isMember(rid);
-        allow write: if (role == 'owner' && isOwner(rid)) || (role == 'partner' && isPartner(rid));
-      }
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 2
+        && me() in request.resource.data.members
+        && request.resource.data.members[0] != request.resource.data.members[1]
+        && pairId == pairIdOf(request.resource.data.members[0], request.resource.data.members[1])
+        && inviteValid(request.resource.data.invite, request.resource.data.members);
+      allow update: if signedIn() && me() in resource.data.members
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if signedIn() && me() in resource.data.members;
 
       match /matches/{movieId} {
-        allow read, write: if isMember(rid);
+        allow read, write: if memberOf(pairId);
 
         match /messages/{msgId} {
-          allow read: if isMember(rid);
-          allow create: if isMember(rid)
+          allow read: if memberOf(pairId);
+          allow create: if memberOf(pairId)
+            && request.resource.data.uid == me()
             && request.resource.data.text is string
             && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
         }

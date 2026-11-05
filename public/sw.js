@@ -1,5 +1,5 @@
 // MovixMatch service worker: app shell offline, posters cache-first, API always network.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL = `shell-${VERSION}`;
 const POSTERS = 'posters-v1';
 const SHELL_FILES = ['/', '/index.html', '/styles.css', '/app.js', '/firebase-config.js', '/movies.json', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png'];
